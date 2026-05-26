@@ -135,13 +135,22 @@ def timeline():
 
 @app.route("/search")
 def search():
-    q = request.args.get("q")
+    q = (request.args.get("q") or "").strip()
     entries = get_all_entries()
-    embeddings = [np.frombuffer(entry.embedding, dtype=np.float64) for entry in entries]
-    query_embedding = get_embedding(q)
-    similarities = [cosine_similarity(query_embedding, emb) for emb in embeddings]
-    indices = np.argsort(similarities)[::-1]
-    sorted_entries = [entries[i] for i in indices]
+    sorted_entries = []
+
+    if q and entries:
+        query_embedding = get_embedding(q)
+        scored_entries = []
+
+        for entry in entries:
+            emb = np.asarray(entry.embedding, dtype=np.float32)
+            if emb.shape != query_embedding.shape:
+                continue
+            scored_entries.append((cosine_similarity(query_embedding, emb), entry))
+
+        scored_entries.sort(key=lambda x: x[0], reverse=True)
+        sorted_entries = [entry for _, entry in scored_entries]
 
     return render_template_string(
         """
@@ -153,7 +162,7 @@ def search():
                 <div class="col-md-3 mb-4">
                     <div class="card">
                         <a href="#" data-toggle="modal" data-target="#modal-{{ loop.index0 }}">
-                            <img src="/static/{{ entry['timestamp'] }}.webp" alt="Image" class="card-img-top">
+                            <img src="/static/{{ entry.timestamp }}.webp" alt="Image" class="card-img-top">
                         </a>
                     </div>
                 </div>
@@ -161,7 +170,7 @@ def search():
                     <div class="modal-dialog modal-xl" role="document" style="max-width: none; width: 100vw; height: 100vh; padding: 20px;">
                         <div class="modal-content" style="height: calc(100vh - 40px); width: calc(100vw - 40px); padding: 0;">
                             <div class="modal-body" style="padding: 0;">
-                                <img src="/static/{{ entry['timestamp'] }}.webp" alt="Image" style="width: 100%; height: 100%; object-fit: contain; margin: 0 auto;">
+                                <img src="/static/{{ entry.timestamp }}.webp" alt="Image" style="width: 100%; height: 100%; object-fit: contain; margin: 0 auto;">
                             </div>
                         </div>
                     </div>
